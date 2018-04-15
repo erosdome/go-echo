@@ -1,6 +1,10 @@
 format_version: 5
 default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
 
+app:
+  envs:
+  - STEP_VERSION: 0.9.0
+
 workflows:
   test:
     before_run:
@@ -26,38 +30,39 @@ workflows:
             stepman audit --step-yml ./step.yml
 
   release:
-    envs:
-    - BITRISE_STEP_GIT_CLONE_URL: https://github.com/godrei/go-echo.git
-    - BITRISE_STEP_ID: echo
-    - BITRISE_STEP_VERSION: $BITRISE_GIT_TAG
-    - BITRISE_GITHUB_API_TOKEN: $BITRISE_GITHUB_API_TOKEN
-    - MY_STEPLIB_REPO_FORK_GIT_URL: $MY_STEPLIB_REPO_FORK_GIT_URL
     before_run:
     - test
     steps:
-    - git::https://github.com/godrei/steps-generate-changelog@master:
-        inputs:
-        - new_version: $BITRISE_STEP_VERSION
-    - git::https://github.com/godrei/steps-github-release@master:
-        inputs:
-        - api_token: $BITRISE_GITHUB_API_TOKEN
-        - repository_url: $BITRISE_STEP_GIT_CLONE_URL
-        - commit: $BITRISE_GIT_COMMIT
-        - tag: $BITRISE_STEP_VERSION
-        - name: $BITRISE_STEP_VERSION
-        - body: $BITRSE_CHANGELOG
-        - draft: "yes"
     - script:
-        title: Share this step
+        title: Create CHANGELOG and git release
         inputs:
         - content: |-
             #!/bin/bash
             set -ex
-            bitrise share start -c "${MY_STEPLIB_REPO_FORK_GIT_URL}"
-            echo yes | bitrise share create \
-              --stepid "${BITRISE_STEP_ID}" \
-              --tag "${BITRISE_STEP_VERSION}" \
-              --git "${BITRISE_STEP_GIT_CLONE_URL}"
+            go get github.com/bitrise-tools/releaseman
+            export CI=true
+            releaseman create \
+              --version $STEP_VERSION
+
+  share:
+    envs:
+      - MY_STEPLIB_REPO_FORK_GIT_URL: $MY_STEPLIB_REPO_FORK_GIT_URL
+      - STEP_ID_IN_STEPLIB: go-echo
+      - STEP_GIT_VERION_TAG_TO_SHARE: $STEP_VERSION
+      - STEP_GIT_CLONE_URL: https://github.com/godrei/steps-go-echo.git
+    before_run:
+    - test
+    steps:
+    - script:
+        inputs:
+        - content: |-
+            #!/bin/bash
+            set -ex
+            bitrise share start -c ${MY_STEPLIB_REPO_FORK_GIT_URL}
+            bitrise share create \
+                --stepid ${STEP_ID_IN_STEPLIB} \
+                --tag ${STEP_GIT_VERION_TAG_TO_SHARE} \
+                --git ${STEP_GIT_CLONE_URL}
             bitrise share finish
 
   dep-update:
